@@ -1,7 +1,9 @@
+use std::collections::HashMap;
+
 use rand::seq::SliceRandom;
 
 pub struct Brain {
-    words: Vec<String>,
+    words: HashMap<String, HashMap<String, usize>>,
 }
 
 impl Default for Brain {
@@ -14,7 +16,18 @@ impl Default for Brain {
 
 impl Brain {
     pub fn train(&mut self, text: &str) {
-        self.words = text.split(' ').map(|word| word.to_string()).collect()
+        let mut prev_word = None;
+
+        for word in text.split(' ') {
+            if let Some(prev_word) = prev_word.replace(word) {
+                *self
+                    .words
+                    .entry(prev_word.to_string())
+                    .or_default()
+                    .entry(word.to_string())
+                    .or_default() += 1;
+            }
+        }
     }
 
     pub fn prompt(&self, prompt: &str, length: usize) -> String {
@@ -23,7 +36,18 @@ impl Brain {
         let mut rng = rand::thread_rng();
 
         while out.len() < length {
-            out.push(self.words.choose(&mut rng).unwrap().clone());
+            let last_word = out.last().unwrap();
+
+            if let Some(next_words) = self.words.get(last_word) {
+                let next_words: Vec<_> = next_words.iter().collect();
+
+                let next_word = next_words
+                    .choose_weighted(&mut rng, |(_word, frequency)| *frequency)
+                    .unwrap();
+                out.push(next_word.0.to_string());
+            } else {
+                break;
+            }
         }
 
         out.join(" ")
