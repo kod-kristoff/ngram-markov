@@ -4,50 +4,64 @@ use std::iter;
 use rand::seq::SliceRandom;
 
 pub struct Brain {
-    words: HashMap<String, HashMap<String, usize>>,
+    tokens: HashMap<[String; 4], HashMap<String, usize>>,
 }
 
 impl Default for Brain {
     fn default() -> Self {
         Self {
-            words: Default::default(),
+            tokens: Default::default(),
         }
     }
 }
 
 impl Brain {
     pub fn train(&mut self, text: &str) {
-        let mut prev_word = None;
+        let mut context: Vec<&str> = Vec::new();
 
-        for word in Self::tokenize(text) {
-            if let Some(prev_word) = prev_word.replace(word) {
+        for token in Self::tokenize(text) {
+            if let &[c4, c3, c2, c1] = context.as_slice() {
                 *self
-                    .words
-                    .entry(prev_word.to_string())
+                    .tokens
+                    .entry([
+                        c4.to_string(),
+                        c3.to_string(),
+                        c2.to_string(),
+                        c1.to_string(),
+                    ])
                     .or_default()
-                    .entry(word.to_string())
+                    .entry(token.to_string())
                     .or_default() += 1;
+            }
+
+            context.push(token);
+
+            if context.len() > 4 {
+                context.remove(0);
             }
         }
     }
 
     pub fn prompt(&self, prompt: &str, length: usize) -> String {
-        let mut out: Vec<_> = Self::tokenize(prompt)
-            .map(|word| word.to_string())
-            .collect();
+        let mut out: Vec<_> = Self::tokenize(prompt).collect();
 
         let mut rng = rand::thread_rng();
 
         while out.len() < length {
-            let last_word = out.last().unwrap();
+            let context = [
+                out[out.len() - 4].to_string(),
+                out[out.len() - 3].to_string(),
+                out[out.len() - 2].to_string(),
+                out[out.len() - 1].to_string(),
+            ];
 
-            if let Some(next_words) = self.words.get(last_word) {
-                let next_words: Vec<_> = next_words.iter().collect();
+            if let Some(next_tokens) = self.tokens.get(&context) {
+                let next_tokens: Vec<_> = next_tokens.iter().collect();
 
-                let next_word = next_words
-                    .choose_weighted(&mut rng, |(_word, frequency)| *frequency)
+                let next_token = next_tokens
+                    .choose_weighted(&mut rng, |(_token, frequency)| *frequency)
                     .unwrap();
-                out.push(next_word.0.to_string());
+                out.push(next_token.0);
             } else {
                 break;
             }
