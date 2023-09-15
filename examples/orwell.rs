@@ -11,6 +11,6 @@ fn main() -> Result<(), Box<dyn Error>> {
     let mut brain = Brain::default();
     brain.train(&text);
 
-    println!("{}", brain.prompt("It was a", 64));
+    println!("{}", brain.prompt("It was", 256));
     Ok(())
 }

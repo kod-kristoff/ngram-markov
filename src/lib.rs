@@ -4,7 +4,7 @@ use std::iter;
 use rand::seq::SliceRandom;
 
 pub struct Brain {
-    tokens: HashMap<[String; 4], HashMap<String, usize>>,
+    tokens: HashMap<Vec<String>, HashMap<String, usize>>,
 }
 
 impl Default for Brain {
@@ -16,19 +16,20 @@ impl Default for Brain {
 }
 
 impl Brain {
+    const MAX_CONTEXT_SIZE: usize = 5;
+
     pub fn train(&mut self, text: &str) {
         let mut context: Vec<&str> = Vec::new();
 
         for token in Self::tokenize(text) {
-            if let &[c4, c3, c2, c1] = context.as_slice() {
+            for cs in 1..=context.len() {
+                let context = context[(context.len() - cs)..context.len()]
+                    .iter()
+                    .map(|token| token.to_string())
+                    .collect();
                 *self
                     .tokens
-                    .entry([
-                        c4.to_string(),
-                        c3.to_string(),
-                        c2.to_string(),
-                        c1.to_string(),
-                    ])
+                    .entry(context)
                     .or_default()
                     .entry(token.to_string())
                     .or_default() += 1;
@@ -36,7 +37,7 @@ impl Brain {
 
             context.push(token);
 
-            if context.len() > 4 {
+            if context.len() > Self::MAX_CONTEXT_SIZE {
                 context.remove(0);
             }
         }
@@ -48,25 +49,37 @@ impl Brain {
         let mut rng = rand::thread_rng();
 
         while out.len() < length {
-            let context = [
-                out[out.len() - 4].to_string(),
-                out[out.len() - 3].to_string(),
-                out[out.len() - 2].to_string(),
-                out[out.len() - 1].to_string(),
-            ];
+            let mut next_token = None;
 
-            if let Some(next_tokens) = self.tokens.get(&context) {
-                let next_tokens: Vec<_> = next_tokens.iter().collect();
+            for cs in (1..=Self::MAX_CONTEXT_SIZE).rev() {
+                if cs > out.len() {
+                    continue;
+                }
+                let context: Vec<_> = out[(out.len() - cs)..out.len()]
+                    .iter()
+                    .map(|token| token.to_string())
+                    .collect();
 
-                let next_token = next_tokens
-                    .choose_weighted(&mut rng, |(_token, frequency)| *frequency)
-                    .unwrap();
-                out.push(next_token.0);
+                if let Some(next_tokens) = self.tokens.get(&context) {
+                    let next_tokens: Vec<_> = next_tokens.iter().collect();
+
+                    next_token = Some(
+                        next_tokens
+                            .choose_weighted(&mut rng, |(_token, frequency)| *frequency)
+                            .unwrap()
+                            .0,
+                    );
+
+                    break;
+                }
+            }
+
+            if let Some(next_token) = next_token {
+                out.push(next_token);
             } else {
                 break;
             }
         }
-
         out.join("")
     }
 
